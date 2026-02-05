@@ -8,7 +8,7 @@ from sequence_mcp.client import SequenceClient
 from sequence_mcp.models import SequenceError
 
 
-def describe_SequenceClient():
+def describe_SequenceClient():  # noqa: C901
     """Tests for SequenceClient."""
 
     def describe_initialization():
