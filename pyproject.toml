@@ -60,3 +60,6 @@ max-complexity = 10
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sequence_mcp*"]
+
+[tool.mutmut]
+paths_to_mutate = ["sequence_mcp/"]

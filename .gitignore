@@ -23,6 +23,10 @@ eggs/
 coverage.xml
 htmlcov/
 
+# Mutation testing
+.mutmut-cache
+mutants/
+
 # IDE
 .idea/
 .vscode/
