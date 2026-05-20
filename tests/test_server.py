@@ -22,9 +22,10 @@ def describe_list_tools():
     """Tests for listing available tools."""
 
     @pytest.mark.asyncio
-    async def it_returns_two_tools():
+    async def it_returns_six_tools():
+        # 2 original + 4 new Tier 1 Platform v1 tools
         tools = await list_tools()
-        assert len(tools) == 2
+        assert len(tools) == 6
 
     @pytest.mark.asyncio
     async def it_includes_get_accounts_tool():

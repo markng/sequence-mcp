@@ -9,8 +9,15 @@ An MCP (Model Context Protocol) server that provides access to the [Sequence](ht
 
 ## Features
 
-- **Get Accounts**: Fetch all financial accounts (Pods, Income Sources, external accounts) with current balances
-- **Trigger Rules**: Invoke automation rules configured in Sequence from external systems
+### Original tools (legacy API)
+- **get_accounts**: Fetch all financial accounts (Pods, Income Sources, external accounts) with current balances
+- **trigger_rule**: Invoke automation rules configured in Sequence using per-rule API secrets
+
+### Tier 1 Platform v1 tools (read-only, high CFO value)
+- **get_rule**: Fetch a rule's full composition — trigger type, steps, conditions, and actions
+- **list_rule_executions**: List recent executions of a rule with status (EXECUTED/PARTIAL/FAILED/IN_PROGRESS)
+- **get_rule_execution**: Get full detail for one firing — transfer counts, IDs, and error messages
+- **list_transfers**: List per-account transfer history ordered newest first
 
 ## Requirements
 
@@ -42,11 +49,21 @@ An MCP (Model Context Protocol) server that provides access to the [Sequence](ht
 
 ### Getting Your Credentials
 
+#### Legacy tools (`get_accounts`, `trigger_rule`)
+
 1. **Enable the External API**: Go to Settings > Enable Remote API in your Sequence dashboard
+2. **Generate an Access Token**: Navigate to Account Settings > Access Tokens. Used for `get_accounts`.
+3. **Get Rule API Secrets**: Each Rule with "Remote API" trigger type has an API secret. Used for `trigger_rule`.
 
-2. **Generate an Access Token**: Navigate to Account Settings > Access Tokens and create a new token. This is used for fetching account data.
+#### Tier 1 Platform v1 tools
 
-3. **Get Rule API Secrets**: When you create a Rule with "Remote API" trigger type, an API secret is generated. Use this secret to trigger that specific rule.
+1. **Create a Platform v1 API Key**: Settings > API Keys > Create Platform v1 Key
+2. Grant the key the scopes it needs:
+   - `READ_RULES` — for `get_rule`, `list_rule_executions`, `get_rule_execution`
+   - `READ_TRANSFERS` — for `list_transfers`
+3. Export the key as `SEQUENCE_ACCESS_TOKEN` (same variable, but different key format)
+
+> **Note**: The legacy `SEQUENCE_ACCESS_TOKEN` (old-format token) does NOT work with Platform v1 endpoints. You need a new Platform v1 key from the dashboard.
 
 ### Environment Variables
 
@@ -94,19 +111,66 @@ Replace `/path/to/sequence-mcp` with the actual path to this project.
 
 Fetches all financial accounts with their current balances.
 
-**Requirements**: `SEQUENCE_ACCESS_TOKEN` environment variable must be set.
+**Requirements**: Legacy `SEQUENCE_ACCESS_TOKEN` (old-format access token).
 
 **Returns**: List of accounts with id, name, type, and balance information.
 
 #### trigger_rule
 
-Triggers an automation rule in Sequence.
+Triggers an automation rule in Sequence using a per-rule API secret.
 
 **Parameters**:
 - `rule_id` (required): The ID of the rule to trigger (e.g., "ru_12345")
-- `api_secret` (required): The API secret associated with this rule
+- `api_secret` (required): The per-rule API secret
 - `payload` (optional): JSON object to send with the trigger
 - `idempotency_key` (optional): Unique key to prevent duplicate triggers on retry
+
+#### get_rule
+
+Fetches a rule's full composition including all steps, conditions, and actions.
+
+**Requirements**: Platform v1 API key with `READ_RULES` scope.
+
+**Parameters**:
+- `rule_id` (required): UUID of the rule
+
+#### list_rule_executions
+
+Lists recent executions of a rule, newest first.
+
+**Requirements**: Platform v1 API key with `READ_RULES` scope.
+
+**Parameters**:
+- `rule_id` (required): UUID of the rule
+- `page` (optional, default 1): 1-based page index
+- `page_size` (optional, default 10, max 100): Items per page
+
+**Returns**: List of executions with id, status, created_at, and pagination metadata.
+
+#### get_rule_execution
+
+Gets full detail for a single rule execution.
+
+**Requirements**: Platform v1 API key with `READ_RULES` scope.
+
+**Parameters**:
+- `rule_id` (required): UUID of the rule
+- `execution_id` (required): UUID of the specific execution
+
+**Returns**: Full execution detail including trigger type, step matched, transfer counts, transfer IDs, and error message.
+
+#### list_transfers
+
+Lists transfers for an account, newest first. Credit/debit card transactions are excluded by the API.
+
+**Requirements**: Platform v1 API key with `READ_TRANSFERS` scope.
+
+**Parameters**:
+- `account_id` (required): UUID of the account
+- `page` (optional, default 1): 1-based page index
+- `page_size` (optional, default 10, max 100): Items per page
+
+**Returns**: List of transfers with amount (cents and dollars), direction, origin, status, source/destination accounts, rule linkage, and timestamps.
 
 ## Development
 
@@ -149,10 +213,12 @@ sequence-mcp/
 │   ├── client.py        # Async HTTP client for Sequence API
 │   └── server.py        # MCP server implementation
 ├── tests/
-│   ├── conftest.py      # Shared test fixtures
-│   ├── test_models.py   # Model tests
-│   ├── test_client.py   # Client tests
-│   └── test_server.py   # Server tests
+│   ├── conftest.py       # Shared test fixtures
+│   ├── test_models.py    # Model tests
+│   ├── test_client.py    # Client tests (legacy endpoints)
+│   ├── test_client_v1.py # Client tests (Platform v1 endpoints)
+│   ├── test_server.py    # Server tests (legacy tools)
+│   └── test_server_v1.py # Server tests (Tier 1 Platform v1 tools)
 ├── pyproject.toml       # Project configuration
 └── README.md
 ```

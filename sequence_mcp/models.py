@@ -1,6 +1,6 @@
 """Pydantic models for Sequence API responses."""
 
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -72,3 +72,239 @@ class SequenceError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(f"{code}: {message}")
+
+
+# ---------------------------------------------------------------------------
+# Platform v1 models — Rules
+# ---------------------------------------------------------------------------
+
+
+class RuleTrigger(BaseModel):
+    """Trigger configuration for a rule."""
+
+    type: str = Field(description="Trigger type (e.g. ON_FUNDS_TRANSFERRED, SCHEDULED)")
+    account_id: str | None = Field(
+        default=None,
+        alias="accountId",
+        description="Account ID for fund-transfer triggers",
+    )
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class RuleActionAccountRef(BaseModel):
+    """Account reference within a rule action."""
+
+    id: str
+    type: str
+    name: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class RuleAction(BaseModel):
+    """A single action within a rule step."""
+
+    type: str = Field(description="Action type (e.g. FIXED, PERCENTAGE)")
+    amount_in_cents: int | None = Field(default=None, alias="amountInCents")
+    percentage_value: float | None = Field(default=None, alias="percentageValue")
+    percentage_target: str | None = Field(default=None, alias="percentageTarget")
+    source: RuleActionAccountRef | None = None
+    destination: RuleActionAccountRef | None = None
+    group_index: int | None = Field(default=None, alias="groupIndex")
+    up_to_enabled: bool | None = Field(default=None, alias="upToEnabled")
+    is_direct_deposit: bool | None = Field(default=None, alias="isDirectDeposit")
+    limit: Any = None
+    ach_description: str | None = Field(default=None, alias="achDescription")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class RuleConditionExpr(BaseModel):
+    """A single condition expression."""
+
+    fact: str | None = None
+    operator: str | None = None
+    value: Any = None
+    value_fact: Any = Field(default=None, alias="valueFact")
+    params: Any = None
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class RuleConditions(BaseModel):
+    """Conditions block for a rule step."""
+
+    condition: RuleConditionExpr | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class RuleStep(BaseModel):
+    """A single step in a rule."""
+
+    conditions: RuleConditions | None = None
+    actions: list[RuleAction] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
+
+
+class Rule(BaseModel):
+    """A Sequence automation rule."""
+
+    id: str
+    name: str | None = None
+    description: str | None = None
+    status: Literal["ENABLED", "DISABLED"]
+    trigger: RuleTrigger
+    steps: list[RuleStep]
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+    deleted_at: str | None = Field(default=None, alias="deletedAt")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class GetRuleResponse(BaseModel):
+    """Response from GET /rules/{id}."""
+
+    request_id: str = Field(alias="requestId")
+    data: Rule
+
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
+# Platform v1 models — Rule Executions
+# ---------------------------------------------------------------------------
+
+
+class RuleExecutionSummary(BaseModel):
+    """Lightweight rule execution as returned by the list endpoint."""
+
+    id: str
+    rule_id: str = Field(alias="ruleId")
+    status: Literal["EXECUTED", "PARTIAL", "IN_PROGRESS", "FAILED"]
+    created_at: str = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class TriggerDetails(BaseModel):
+    """Details about what triggered a rule execution."""
+
+    type: str = Field(description="Trigger type (MANUAL, SCHEDULED, ON_FUNDS_TRANSFERRED)")
+    amount_in_cents: int | None = Field(default=None, alias="amountInCents")
+    scheduled_time: str | None = Field(default=None, alias="scheduledTime")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class RuleExecution(RuleExecutionSummary):
+    """Full rule execution including trigger details and transfer outcome."""
+
+    trigger_details: TriggerDetails = Field(alias="triggerDetails")
+    step_index_matched: int | None = Field(alias="stepIndexMatched")
+    conditions_not_met: bool = Field(alias="conditionsNotMet")
+    transfers_attempted: int = Field(alias="transfersAttempted")
+    transfers_completed: int = Field(alias="transfersCompleted")
+    transfers_failed: int = Field(alias="transfersFailed")
+    transfers_pending: int = Field(alias="transfersPending")
+    transfer_ids: list[str] = Field(alias="transferIds")
+    error_message: str | None = Field(alias="errorMessage")
+    next_attempt_at: str | None = Field(alias="nextAttemptAt")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class Pagination(BaseModel):
+    """Pagination metadata."""
+
+    page: int
+    page_size: int = Field(alias="pageSize")
+
+    model_config = {"populate_by_name": True}
+
+
+class PaginatedRuleExecutionsData(BaseModel):
+    """Paginated list of rule execution summaries."""
+
+    items: list[RuleExecutionSummary]
+    pagination: Pagination
+
+
+class ListRuleExecutionsResponse(BaseModel):
+    """Response from GET /rules/{ruleId}/executions."""
+
+    request_id: str = Field(alias="requestId")
+    data: PaginatedRuleExecutionsData
+
+    model_config = {"populate_by_name": True}
+
+
+class GetRuleExecutionResponse(BaseModel):
+    """Response from GET /rules/{ruleId}/executions/{id}."""
+
+    request_id: str = Field(alias="requestId")
+    data: RuleExecution
+
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
+# Platform v1 models — Transfers
+# ---------------------------------------------------------------------------
+
+
+class TransferAccountRef(BaseModel):
+    """Account reference within a transfer."""
+
+    id: str
+    name: str | None = None
+    type: str
+    is_deleted: bool = Field(alias="isDeleted")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class Transfer(BaseModel):
+    """A single money movement."""
+
+    id: str
+    amount_in_cents: int = Field(alias="amountInCents")
+    direction: Literal["MONEY_IN", "MONEY_OUT", "INTERNAL"]
+    origin: str
+    status: Literal[
+        "PENDING_APPROVAL",
+        "PROCESSING",
+        "PENDING",
+        "COMPLETE",
+        "INCOMPLETE",
+        "ERROR",
+        "CANCELLED",
+    ]
+    source: TransferAccountRef | None = None
+    destination: TransferAccountRef | None = None
+    rule_id: str | None = Field(default=None, alias="ruleId")
+    rule_execution_id: str | None = Field(default=None, alias="ruleExecutionId")
+    error_code: str | None = Field(default=None, alias="errorCode")
+    created_at: str = Field(alias="createdAt")
+    completed_at: str | None = Field(default=None, alias="completedAt")
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class PaginatedTransfersData(BaseModel):
+    """Paginated list of transfers."""
+
+    items: list[Transfer]
+    pagination: Pagination
+
+
+class ListTransfersResponse(BaseModel):
+    """Response from GET /accounts/{accountId}/transfers."""
+
+    request_id: str = Field(alias="requestId")
+    data: PaginatedTransfersData
+
+    model_config = {"populate_by_name": True}
