@@ -164,6 +164,33 @@ class Rule(BaseModel):
 
     model_config = {"populate_by_name": True, "extra": "allow"}
 
+    def to_tool_payload(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict suitable for MCP tool responses."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "status": self.status,
+            "trigger": self.trigger.model_dump(by_alias=False, exclude_none=True),
+            "steps": [
+                {
+                    "conditions": step.conditions.model_dump(
+                        by_alias=False, exclude_none=True
+                    )
+                    if step.conditions
+                    else None,
+                    "actions": [
+                        action.model_dump(by_alias=False, exclude_none=True)
+                        for action in step.actions
+                    ],
+                }
+                for step in self.steps
+            ],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "deleted_at": self.deleted_at,
+        }
+
 
 class GetRuleResponse(BaseModel):
     """Response from GET /rules/{id}."""
@@ -189,11 +216,22 @@ class RuleExecutionSummary(BaseModel):
 
     model_config = {"populate_by_name": True, "extra": "allow"}
 
+    def to_tool_payload(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict suitable for MCP tool responses."""
+        return {
+            "id": self.id,
+            "rule_id": self.rule_id,
+            "status": self.status,
+            "created_at": self.created_at,
+        }
+
 
 class TriggerDetails(BaseModel):
     """Details about what triggered a rule execution."""
 
-    type: str = Field(description="Trigger type (MANUAL, SCHEDULED, ON_FUNDS_TRANSFERRED)")
+    type: str = Field(
+        description="Trigger type (MANUAL, SCHEDULED, ON_FUNDS_TRANSFERRED)"
+    )
     amount_in_cents: int | None = Field(default=None, alias="amountInCents")
     scheduled_time: str | None = Field(default=None, alias="scheduledTime")
 
@@ -215,6 +253,27 @@ class RuleExecution(RuleExecutionSummary):
     next_attempt_at: str | None = Field(alias="nextAttemptAt")
 
     model_config = {"populate_by_name": True, "extra": "allow"}
+
+    def to_tool_payload(self) -> dict[str, Any]:  # type: ignore[override]
+        """Return a JSON-serialisable dict suitable for MCP tool responses."""
+        return {
+            "id": self.id,
+            "rule_id": self.rule_id,
+            "status": self.status,
+            "created_at": self.created_at,
+            "trigger_details": self.trigger_details.model_dump(
+                by_alias=False, exclude_none=True
+            ),
+            "step_index_matched": self.step_index_matched,
+            "conditions_not_met": self.conditions_not_met,
+            "transfers_attempted": self.transfers_attempted,
+            "transfers_completed": self.transfers_completed,
+            "transfers_failed": self.transfers_failed,
+            "transfers_pending": self.transfers_pending,
+            "transfer_ids": self.transfer_ids,
+            "error_message": self.error_message,
+            "next_attempt_at": self.next_attempt_at,
+        }
 
 
 class Pagination(BaseModel):
@@ -292,6 +351,28 @@ class Transfer(BaseModel):
     completed_at: str | None = Field(default=None, alias="completedAt")
 
     model_config = {"populate_by_name": True, "extra": "allow"}
+
+    def to_tool_payload(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict suitable for MCP tool responses."""
+        return {
+            "id": self.id,
+            "amount_in_cents": self.amount_in_cents,
+            "amount_in_dollars": self.amount_in_cents / 100,
+            "direction": self.direction,
+            "origin": self.origin,
+            "status": self.status,
+            "source": self.source.model_dump(by_alias=False) if self.source else None,
+            "destination": (
+                self.destination.model_dump(by_alias=False)
+                if self.destination
+                else None
+            ),
+            "rule_id": self.rule_id,
+            "rule_execution_id": self.rule_execution_id,
+            "error_code": self.error_code,
+            "created_at": self.created_at,
+            "completed_at": self.completed_at,
+        }
 
 
 class PaginatedTransfersData(BaseModel):

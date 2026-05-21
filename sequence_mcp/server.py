@@ -1,80 +1,75 @@
 """MCP server for the Sequence Banking API."""
 
-import os
-import sys
+import io
 import json
 import logging
+import os
+import sys
 from typing import Any
 
-# Configure logging FIRST before any imports that might log
-# Log to file AND stderr (stdout is reserved for MCP protocol messages)
-LOG_FILE = os.path.expanduser("~/Library/Logs/sequence-mcp.log")
-
-# Ensure log directory exists
-os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-
-# Set up logging with both file and stderr handlers
-logger = logging.getLogger("sequence-mcp")
-logger.setLevel(logging.DEBUG)
-
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-# File handler - persistent logs
-file_handler = logging.FileHandler(LOG_FILE)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-# Stderr handler - for direct terminal viewing
-stderr_handler = logging.StreamHandler(sys.stderr)
-stderr_handler.setLevel(logging.DEBUG)
-stderr_handler.setFormatter(formatter)
-logger.addHandler(stderr_handler)
-
-logger.info("Logging to file: %s", LOG_FILE)
-
-# Log immediately on module load
-logger.debug("=== sequence-mcp module loading ===")
-logger.debug("Python version: %s", sys.version)
-logger.debug("Python executable: %s", sys.executable)
-logger.debug("Working directory: %s", os.getcwd())
-logger.debug("PYTHONPATH: %s", os.environ.get("PYTHONPATH", "(not set)"))
-
-logger.debug("Importing mcp.server...")
 from mcp.server import Server
-
-logger.debug("Imported mcp.server.Server")
-
-logger.debug("Importing mcp.server.stdio...")
 from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
 
-logger.debug("Imported stdio_server")
-
-logger.debug("Importing mcp.types...")
-from mcp.types import Tool, TextContent
-
-logger.debug("Imported Tool, TextContent")
-
-logger.debug("Importing local modules...")
 from .client import SequenceClient
 from .models import SequenceError
 
-logger.debug("All imports complete")
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+# Log to file AND stderr (stdout is reserved for MCP protocol messages)
+LOG_FILE = os.path.expanduser("~/Library/Logs/sequence-mcp.log")
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
-logger.debug("Creating MCP Server instance...")
+logger = logging.getLogger("sequence-mcp")
+logger.setLevel(logging.DEBUG)
+
+_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+_file_handler = logging.FileHandler(LOG_FILE)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(_formatter)
+logger.addHandler(_file_handler)
+
+_stderr_handler = logging.StreamHandler(sys.stderr)
+_stderr_handler.setLevel(logging.DEBUG)
+_stderr_handler.setFormatter(_formatter)
+logger.addHandler(_stderr_handler)
+
+# ---------------------------------------------------------------------------
+# MCP server instance
+# ---------------------------------------------------------------------------
+
 server = Server("sequence-banking")
-logger.debug("MCP Server instance created: %s", server)
 
 
 def get_access_token() -> str | None:
-    """Get the access token from environment."""
+    """Get the legacy access token from environment."""
     return os.environ.get("SEQUENCE_ACCESS_TOKEN")
+
+
+def get_v1_api_key() -> str | None:
+    """Get the Platform v1 API key from environment."""
+    return os.environ.get("SEQUENCE_V1_API_KEY")
+
+
+def _check_fileno(stream: object, name: str) -> None:
+    """Log the file descriptor number of *stream*, or note it is a pseudofile.
+
+    Some test runners (e.g. pytest) replace stdin/stdout with pseudofile objects
+    that do not support ``fileno()``.  We catch only ``io.UnsupportedOperation``
+    so that genuine ``OSError`` failures still surface.
+    """
+    try:
+        fd = stream.fileno()  # type: ignore[union-attr]
+        logger.debug("%s fileno: %s", name, fd)
+    except io.UnsupportedOperation:
+        logger.debug("%s fileno: not available (pseudofile)", name)
 
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
-    logger.debug("list_tools() called - returning 6 tools")
     return [
         Tool(
             name="get_accounts",
@@ -126,7 +121,7 @@ async def list_tools() -> list[Tool]:
                 "Fetch a Sequence automation rule by ID, including its full composition: "
                 "trigger type, all steps, conditions, and actions. "
                 "Useful for auditing rule logic without visiting the Sequence dashboard. "
-                "Requires SEQUENCE_ACCESS_TOKEN with READ_RULES permission."
+                "Requires SEQUENCE_V1_API_KEY with READ_RULES permission."
             ),
             inputSchema={
                 "type": "object",
@@ -146,7 +141,7 @@ async def list_tools() -> list[Tool]:
                 "Returns status (EXECUTED/PARTIAL/FAILED/IN_PROGRESS) and timestamps. "
                 "Use get_rule_execution for full detail on a specific firing. "
                 "Replaces manual UI inspection of rule history. "
-                "Requires SEQUENCE_ACCESS_TOKEN with READ_RULES permission."
+                "Requires SEQUENCE_V1_API_KEY with READ_RULES permission."
             ),
             inputSchema={
                 "type": "object",
@@ -179,7 +174,7 @@ async def list_tools() -> list[Tool]:
                 "matched, transfer counts (attempted/completed/failed/pending), transfer IDs, "
                 "and any error message. "
                 "Use after list_rule_executions to investigate a specific firing. "
-                "Requires SEQUENCE_ACCESS_TOKEN with READ_RULES permission."
+                "Requires SEQUENCE_V1_API_KEY with READ_RULES permission."
             ),
             inputSchema={
                 "type": "object",
@@ -203,7 +198,7 @@ async def list_tools() -> list[Tool]:
                 "Covers rule-triggered transfers, user-initiated transfers, direct deposits, "
                 "and external pulls. Credit/debit card transactions are excluded by the API. "
                 "Especially useful for Apple Card balance reconstruction when the feed is stale. "
-                "Requires SEQUENCE_ACCESS_TOKEN with READ_TRANSFERS permission."
+                "Requires SEQUENCE_V1_API_KEY with READ_TRANSFERS permission."
             ),
             inputSchema={
                 "type": "object",
@@ -362,17 +357,31 @@ async def handle_trigger_rule(arguments: dict[str, Any]) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
+def _require_v1_api_key() -> str | None:
+    """Return the Platform v1 API key, or None if unset.
+
+    Callers are responsible for returning an appropriate error response when
+    this returns None (so that the server handler can produce a user-visible
+    error rather than raising during tool dispatch).
+    """
+    return get_v1_api_key()
+
+
 async def handle_get_rule(arguments: dict[str, Any]) -> list[TextContent]:
     """Handle the get_rule tool call."""
-    access_token = get_access_token()
-    if not access_token:
+    v1_key = _require_v1_api_key()
+    if not v1_key:
         return [
             TextContent(
                 type="text",
                 text=json.dumps(
                     {
                         "error": True,
-                        "message": "SEQUENCE_ACCESS_TOKEN environment variable is not set",
+                        "message": (
+                            "SEQUENCE_V1_API_KEY environment variable is not set. "
+                            "Generate a Platform v1 API key from Sequence dashboard "
+                            "(Settings > API Keys) with READ_RULES scope."
+                        ),
                     }
                 ),
             )
@@ -387,46 +396,27 @@ async def handle_get_rule(arguments: dict[str, Any]) -> list[TextContent]:
             )
         ]
 
-    async with SequenceClient(access_token=access_token) as client:
+    async with SequenceClient(access_token=v1_key) as client:
         rule = await client.get_rule(rule_id=rule_id)
 
-    result = {
-        "id": rule.id,
-        "name": rule.name,
-        "description": rule.description,
-        "status": rule.status,
-        "trigger": rule.trigger.model_dump(by_alias=False, exclude_none=True),
-        "steps": [
-            {
-                "conditions": step.conditions.model_dump(
-                    by_alias=False, exclude_none=True
-                ) if step.conditions else None,
-                "actions": [
-                    action.model_dump(by_alias=False, exclude_none=True)
-                    for action in step.actions
-                ],
-            }
-            for step in rule.steps
-        ],
-        "created_at": rule.created_at,
-        "updated_at": rule.updated_at,
-        "deleted_at": rule.deleted_at,
-    }
-
-    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    return [TextContent(type="text", text=json.dumps(rule.to_tool_payload(), indent=2))]
 
 
 async def handle_list_rule_executions(arguments: dict[str, Any]) -> list[TextContent]:
     """Handle the list_rule_executions tool call."""
-    access_token = get_access_token()
-    if not access_token:
+    v1_key = _require_v1_api_key()
+    if not v1_key:
         return [
             TextContent(
                 type="text",
                 text=json.dumps(
                     {
                         "error": True,
-                        "message": "SEQUENCE_ACCESS_TOKEN environment variable is not set",
+                        "message": (
+                            "SEQUENCE_V1_API_KEY environment variable is not set. "
+                            "Generate a Platform v1 API key from Sequence dashboard "
+                            "(Settings > API Keys) with READ_RULES scope."
+                        ),
                     }
                 ),
             )
@@ -444,7 +434,7 @@ async def handle_list_rule_executions(arguments: dict[str, Any]) -> list[TextCon
     page = arguments.get("page", 1)
     page_size = arguments.get("page_size", 10)
 
-    async with SequenceClient(access_token=access_token) as client:
+    async with SequenceClient(access_token=v1_key) as client:
         items, pagination = await client.list_rule_executions(
             rule_id=rule_id,
             page=page,
@@ -453,15 +443,7 @@ async def handle_list_rule_executions(arguments: dict[str, Any]) -> list[TextCon
 
     result = {
         "rule_id": rule_id,
-        "executions": [
-            {
-                "id": item.id,
-                "rule_id": item.rule_id,
-                "status": item.status,
-                "created_at": item.created_at,
-            }
-            for item in items
-        ],
+        "executions": [item.to_tool_payload() for item in items],
         "total_returned": len(items),
         "pagination": pagination,
     }
@@ -471,15 +453,19 @@ async def handle_list_rule_executions(arguments: dict[str, Any]) -> list[TextCon
 
 async def handle_get_rule_execution(arguments: dict[str, Any]) -> list[TextContent]:
     """Handle the get_rule_execution tool call."""
-    access_token = get_access_token()
-    if not access_token:
+    v1_key = _require_v1_api_key()
+    if not v1_key:
         return [
             TextContent(
                 type="text",
                 text=json.dumps(
                     {
                         "error": True,
-                        "message": "SEQUENCE_ACCESS_TOKEN environment variable is not set",
+                        "message": (
+                            "SEQUENCE_V1_API_KEY environment variable is not set. "
+                            "Generate a Platform v1 API key from Sequence dashboard "
+                            "(Settings > API Keys) with READ_RULES scope."
+                        ),
                     }
                 ),
             )
@@ -503,45 +489,32 @@ async def handle_get_rule_execution(arguments: dict[str, Any]) -> list[TextConte
             )
         ]
 
-    async with SequenceClient(access_token=access_token) as client:
+    async with SequenceClient(access_token=v1_key) as client:
         execution = await client.get_rule_execution(
             rule_id=rule_id,
             execution_id=execution_id,
         )
 
-    result = {
-        "id": execution.id,
-        "rule_id": execution.rule_id,
-        "status": execution.status,
-        "created_at": execution.created_at,
-        "trigger_details": execution.trigger_details.model_dump(
-            by_alias=False, exclude_none=True
-        ),
-        "step_index_matched": execution.step_index_matched,
-        "conditions_not_met": execution.conditions_not_met,
-        "transfers_attempted": execution.transfers_attempted,
-        "transfers_completed": execution.transfers_completed,
-        "transfers_failed": execution.transfers_failed,
-        "transfers_pending": execution.transfers_pending,
-        "transfer_ids": execution.transfer_ids,
-        "error_message": execution.error_message,
-        "next_attempt_at": execution.next_attempt_at,
-    }
-
-    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    return [
+        TextContent(type="text", text=json.dumps(execution.to_tool_payload(), indent=2))
+    ]
 
 
 async def handle_list_transfers(arguments: dict[str, Any]) -> list[TextContent]:
     """Handle the list_transfers tool call."""
-    access_token = get_access_token()
-    if not access_token:
+    v1_key = _require_v1_api_key()
+    if not v1_key:
         return [
             TextContent(
                 type="text",
                 text=json.dumps(
                     {
                         "error": True,
-                        "message": "SEQUENCE_ACCESS_TOKEN environment variable is not set",
+                        "message": (
+                            "SEQUENCE_V1_API_KEY environment variable is not set. "
+                            "Generate a Platform v1 API key from Sequence dashboard "
+                            "(Settings > API Keys) with READ_TRANSFERS scope."
+                        ),
                     }
                 ),
             )
@@ -559,7 +532,7 @@ async def handle_list_transfers(arguments: dict[str, Any]) -> list[TextContent]:
     page = arguments.get("page", 1)
     page_size = arguments.get("page_size", 10)
 
-    async with SequenceClient(access_token=access_token) as client:
+    async with SequenceClient(access_token=v1_key) as client:
         items, pagination = await client.list_transfers(
             account_id=account_id,
             page=page,
@@ -568,26 +541,7 @@ async def handle_list_transfers(arguments: dict[str, Any]) -> list[TextContent]:
 
     result = {
         "account_id": account_id,
-        "transfers": [
-            {
-                "id": t.id,
-                "amount_in_cents": t.amount_in_cents,
-                "amount_in_dollars": t.amount_in_cents / 100,
-                "direction": t.direction,
-                "origin": t.origin,
-                "status": t.status,
-                "source": t.source.model_dump(by_alias=False) if t.source else None,
-                "destination": (
-                    t.destination.model_dump(by_alias=False) if t.destination else None
-                ),
-                "rule_id": t.rule_id,
-                "rule_execution_id": t.rule_execution_id,
-                "error_code": t.error_code,
-                "created_at": t.created_at,
-                "completed_at": t.completed_at,
-            }
-            for t in items
-        ],
+        "transfers": [t.to_tool_payload() for t in items],
         "total_returned": len(items),
         "pagination": pagination,
     }
@@ -598,7 +552,6 @@ async def handle_list_transfers(arguments: dict[str, Any]) -> list[TextContent]:
 async def main():  # pragma: no cover
     """Run the MCP server."""
     logger.info("=== Starting Sequence MCP server ===")
-    logger.debug("main() entered")
 
     # Log environment status (without exposing secrets)
     access_token = get_access_token()
@@ -607,27 +560,26 @@ async def main():  # pragma: no cover
     else:
         logger.warning("SEQUENCE_ACCESS_TOKEN is not set - get_accounts will fail")
 
+    v1_key = get_v1_api_key()
+    if v1_key:
+        logger.info("SEQUENCE_V1_API_KEY is set (%d chars)", len(v1_key))
+    else:
+        logger.warning(
+            "SEQUENCE_V1_API_KEY is not set - v1 tools (get_rule, list_rule_executions, "
+            "get_rule_execution, list_transfers) will fail"
+        )
+
     # Log stdin/stdout status
     logger.debug("stdin isatty: %s", sys.stdin.isatty())
     logger.debug("stdout isatty: %s", sys.stdout.isatty())
     logger.debug("stderr isatty: %s", sys.stderr.isatty())
-    try:
-        logger.debug("stdin fileno: %s", sys.stdin.fileno())
-        logger.debug("stdout fileno: %s", sys.stdout.fileno())
-    except Exception:
-        logger.debug("stdin/stdout fileno: not available (pseudofile)")
+    _check_fileno(sys.stdin, "stdin")
+    _check_fileno(sys.stdout, "stdout")
 
     try:
-        logger.debug("Entering stdio_server() context manager...")
         async with stdio_server() as (read_stream, write_stream):
             logger.info("stdio_server context entered successfully")
-            logger.debug("read_stream type: %s", type(read_stream))
-            logger.debug("write_stream type: %s", type(write_stream))
-
-            logger.debug("Creating initialization options...")
             init_options = server.create_initialization_options()
-            logger.debug("Initialization options: %s", init_options)
-
             logger.info("Calling server.run() - awaiting MCP requests...")
             await server.run(
                 read_stream,
@@ -643,9 +595,6 @@ async def main():  # pragma: no cover
 if __name__ == "__main__":  # pragma: no cover
     import asyncio
 
-    logger.info("=== __main__ block executing ===")
-    logger.debug("About to call asyncio.run(main())")
-
     try:
         asyncio.run(main())
         logger.info("asyncio.run(main()) completed normally")
@@ -654,5 +603,3 @@ if __name__ == "__main__":  # pragma: no cover
     except Exception as e:
         logger.exception("Fatal error starting server: %s", e)
         sys.exit(1)
-
-logger.debug("=== sequence-mcp module fully loaded ===")

@@ -15,6 +15,8 @@ from sequence_mcp.server import (
     handle_trigger_rule,
     main,
     get_access_token,
+    get_v1_api_key,
+    _check_fileno,
 )
 
 
@@ -183,9 +185,9 @@ def describe_handle_trigger_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_triggers_rule_successfully(sample_trigger_response):
-        respx.post(
-            "https://api.getsequence.io/remote-api/rules/ru_12345/trigger"
-        ).mock(return_value=httpx.Response(200, json=sample_trigger_response))
+        respx.post("https://api.getsequence.io/remote-api/rules/ru_12345/trigger").mock(
+            return_value=httpx.Response(200, json=sample_trigger_response)
+        )
 
         result = await handle_trigger_rule(
             {"rule_id": "ru_12345", "api_secret": "secret_123"}
@@ -236,9 +238,7 @@ def describe_handle_trigger_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_handles_api_errors(sample_error_response_invalid_secret):
-        respx.post(
-            "https://api.getsequence.io/remote-api/rules/ru_test/trigger"
-        ).mock(
+        respx.post("https://api.getsequence.io/remote-api/rules/ru_test/trigger").mock(
             return_value=httpx.Response(401, json=sample_error_response_invalid_secret)
         )
 
@@ -307,7 +307,9 @@ def describe_main():
         mock_server_run = AsyncMock()
         monkeypatch.setattr(server.server, "run", mock_server_run)
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             await main()
 
         # Verify server.run was called with the mock streams
@@ -337,7 +339,9 @@ def describe_main():
         mock_server_run = AsyncMock()
         monkeypatch.setattr(server.server, "run", mock_server_run)
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             await main()
 
         # Server should still run even without token
@@ -349,11 +353,65 @@ def describe_main():
         monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", "test_token")
 
         mock_context_manager = AsyncMock()
-        mock_context_manager.__aenter__.side_effect = RuntimeError("Server connection failed")
+        mock_context_manager.__aenter__.side_effect = RuntimeError(
+            "Server connection failed"
+        )
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             with pytest.raises(RuntimeError, match="Server connection failed"):
                 await main()
+
+
+def describe_get_v1_api_key():
+    """Tests for the get_v1_api_key helper function."""
+
+    def it_returns_key_when_set(monkeypatch):
+        monkeypatch.setenv("SEQUENCE_V1_API_KEY", "v1_key_value")
+        assert get_v1_api_key() == "v1_key_value"
+
+    def it_returns_none_when_not_set(monkeypatch):
+        monkeypatch.delenv("SEQUENCE_V1_API_KEY", raising=False)
+        assert get_v1_api_key() is None
+
+    def it_is_independent_of_access_token(monkeypatch):
+        """SEQUENCE_V1_API_KEY and SEQUENCE_ACCESS_TOKEN are independent."""
+        monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", "old_token")
+        monkeypatch.delenv("SEQUENCE_V1_API_KEY", raising=False)
+        assert get_v1_api_key() is None
+        assert get_access_token() == "old_token"
+
+
+def describe_check_fileno():
+    """Tests for the _check_fileno helper (stdin/stdout pseudofile logging)."""
+
+    def it_logs_fileno_for_real_stream(caplog):
+        """A stream that supports fileno() should log the fd number."""
+        import io
+        import logging
+
+        # Wrap a real file so fileno() works (even if its number is fictional here
+        # we just need the *path* that doesn't raise).
+        real_file = io.BytesIO()
+        real_file.fileno = lambda: 42  # patch in a fake int return
+
+        with caplog.at_level(logging.DEBUG, logger="sequence-mcp"):
+            _check_fileno(real_file, "teststream")
+
+        assert any("42" in r.message for r in caplog.records)
+
+    def it_logs_pseudofile_note_when_fileno_unsupported(caplog):
+        """A pseudofile (like pytest's stdin substitute) triggers io.UnsupportedOperation."""
+        import io
+        import logging
+
+        pseudo = io.StringIO()  # StringIO raises io.UnsupportedOperation on fileno()
+
+        with caplog.at_level(logging.DEBUG, logger="sequence-mcp"):
+            _check_fileno(pseudo, "pseudostream")
+
+        assert any("pseudofile" in r.message for r in caplog.records)
 
 
 def describe_main_entry_point():
@@ -420,8 +478,7 @@ def describe_main_entry_point():
 
         # The KeyboardInterrupt handler logs "Server stopped by user"
         assert any(
-            "stopped by user" in record.message.lower()
-            for record in caplog.records
+            "stopped by user" in record.message.lower() for record in caplog.records
         )
 
     def it_exits_with_code_1_on_fatal_error(monkeypatch, caplog):

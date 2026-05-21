@@ -79,6 +79,54 @@ def sample_error_response_forbidden():
 
 
 # ---------------------------------------------------------------------------
+# Platform v1 error fixtures — nested shape
+# {"requestId": ..., "error": {"code": ..., "message": ...}}
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_v1_error_unauthorized():
+    """Platform v1 401 unauthorized response (nested shape)."""
+    return {
+        "requestId": "req-err-401",
+        "error": {"code": "UNAUTHORIZED", "message": "Invalid or expired API key"},
+    }
+
+
+@pytest.fixture
+def sample_v1_error_not_found():
+    """Platform v1 404 not found response (nested shape)."""
+    return {
+        "requestId": "req-err-404",
+        "error": {"code": "NOT_FOUND", "message": "Resource not found"},
+    }
+
+
+@pytest.fixture
+def sample_v1_error_forbidden():
+    """Platform v1 403 forbidden response (nested shape)."""
+    return {
+        "requestId": "req-err-403",
+        "error": {
+            "code": "FORBIDDEN",
+            "message": "API key lacks required scope",
+        },
+    }
+
+
+@pytest.fixture
+def sample_v1_error_rate_limit():
+    """Platform v1 429 rate limit response (nested shape)."""
+    return {
+        "requestId": "req-err-429",
+        "error": {
+            "code": "TOO_MANY_REQUESTS",
+            "message": "Rate limit exceeded, please retry after 60 seconds",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Platform v1 fixtures — Rules
 # ---------------------------------------------------------------------------
 

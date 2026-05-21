@@ -1,7 +1,6 @@
 """Tests for the four new Platform v1 MCP tool handlers."""
 
 import json
-import os
 
 import pytest
 import httpx
@@ -29,12 +28,13 @@ ACCOUNT_ID = "c7a7f26f-2ca5-4ae5-825a-70260591247c"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _set_token(monkeypatch, token: str = "test_token") -> None:
-    monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", token)
+
+def _set_v1_key(monkeypatch, key: str = "test_v1_key") -> None:
+    monkeypatch.setenv("SEQUENCE_V1_API_KEY", key)
 
 
-def _clear_token(monkeypatch) -> None:
-    monkeypatch.delenv("SEQUENCE_ACCESS_TOKEN", raising=False)
+def _clear_v1_key(monkeypatch) -> None:
+    monkeypatch.delenv("SEQUENCE_V1_API_KEY", raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -109,15 +109,15 @@ def describe_handle_get_rule():
 
     @pytest.mark.asyncio
     async def it_returns_error_when_token_not_set(monkeypatch):
-        _clear_token(monkeypatch)
+        _clear_v1_key(monkeypatch)
         result = await handle_get_rule({"rule_id": RULE_ID})
         data = json.loads(result[0].text)
         assert data["error"] is True
-        assert "SEQUENCE_ACCESS_TOKEN" in data["message"]
+        assert "SEQUENCE_V1_API_KEY" in data["message"]
 
     @pytest.mark.asyncio
     async def it_returns_error_when_rule_id_missing(monkeypatch):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         result = await handle_get_rule({})
         data = json.loads(result[0].text)
         assert data["error"] is True
@@ -126,7 +126,7 @@ def describe_handle_get_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_returns_rule_data(monkeypatch, sample_rule_response):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
             return_value=httpx.Response(200, json=sample_rule_response)
         )
@@ -144,11 +144,11 @@ def describe_handle_get_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_surfaces_api_error_via_call_tool(
-        monkeypatch, sample_error_response_not_found
+        monkeypatch, sample_v1_error_not_found
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-            return_value=httpx.Response(404, json=sample_error_response_not_found)
+            return_value=httpx.Response(404, json=sample_v1_error_not_found)
         )
 
         result = await call_tool("get_rule", {"rule_id": RULE_ID})
@@ -161,11 +161,11 @@ def describe_handle_get_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_surfaces_rate_limit_error_via_call_tool(
-        monkeypatch, sample_error_response_rate_limit
+        monkeypatch, sample_v1_error_rate_limit
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-            return_value=httpx.Response(429, json=sample_error_response_rate_limit)
+            return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
         )
 
         result = await call_tool("get_rule", {"rule_id": RULE_ID})
@@ -186,15 +186,15 @@ def describe_handle_list_rule_executions():
 
     @pytest.mark.asyncio
     async def it_returns_error_when_token_not_set(monkeypatch):
-        _clear_token(monkeypatch)
+        _clear_v1_key(monkeypatch)
         result = await handle_list_rule_executions({"rule_id": RULE_ID})
         data = json.loads(result[0].text)
         assert data["error"] is True
-        assert "SEQUENCE_ACCESS_TOKEN" in data["message"]
+        assert "SEQUENCE_V1_API_KEY" in data["message"]
 
     @pytest.mark.asyncio
     async def it_returns_error_when_rule_id_missing(monkeypatch):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         result = await handle_list_rule_executions({})
         data = json.loads(result[0].text)
         assert data["error"] is True
@@ -205,11 +205,9 @@ def describe_handle_list_rule_executions():
     async def it_returns_executions_list(
         monkeypatch, sample_list_rule_executions_response
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-            return_value=httpx.Response(
-                200, json=sample_list_rule_executions_response
-            )
+            return_value=httpx.Response(200, json=sample_list_rule_executions_response)
         )
 
         result = await handle_list_rule_executions({"rule_id": RULE_ID})
@@ -227,11 +225,9 @@ def describe_handle_list_rule_executions():
     async def it_passes_page_and_page_size(
         monkeypatch, sample_list_rule_executions_response
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         route = respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-            return_value=httpx.Response(
-                200, json=sample_list_rule_executions_response
-            )
+            return_value=httpx.Response(200, json=sample_list_rule_executions_response)
         )
 
         await handle_list_rule_executions(
@@ -244,14 +240,10 @@ def describe_handle_list_rule_executions():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_401_via_call_tool(
-        monkeypatch, sample_error_response_unauthorized
-    ):
-        _set_token(monkeypatch, "bad")
+    async def it_surfaces_401_via_call_tool(monkeypatch, sample_v1_error_unauthorized):
+        _set_v1_key(monkeypatch, "bad")
         respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-            return_value=httpx.Response(
-                401, json=sample_error_response_unauthorized
-            )
+            return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
         )
 
         result = await call_tool("list_rule_executions", {"rule_id": RULE_ID})
@@ -262,12 +254,10 @@ def describe_handle_list_rule_executions():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_429_via_call_tool(
-        monkeypatch, sample_error_response_rate_limit
-    ):
-        _set_token(monkeypatch)
+    async def it_surfaces_429_via_call_tool(monkeypatch, sample_v1_error_rate_limit):
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-            return_value=httpx.Response(429, json=sample_error_response_rate_limit)
+            return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
         )
 
         result = await call_tool("list_rule_executions", {"rule_id": RULE_ID})
@@ -287,17 +277,17 @@ def describe_handle_get_rule_execution():
 
     @pytest.mark.asyncio
     async def it_returns_error_when_token_not_set(monkeypatch):
-        _clear_token(monkeypatch)
+        _clear_v1_key(monkeypatch)
         result = await handle_get_rule_execution(
             {"rule_id": RULE_ID, "execution_id": EXECUTION_ID_1}
         )
         data = json.loads(result[0].text)
         assert data["error"] is True
-        assert "SEQUENCE_ACCESS_TOKEN" in data["message"]
+        assert "SEQUENCE_V1_API_KEY" in data["message"]
 
     @pytest.mark.asyncio
     async def it_returns_error_when_rule_id_missing(monkeypatch):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         result = await handle_get_rule_execution({"execution_id": EXECUTION_ID_1})
         data = json.loads(result[0].text)
         assert data["error"] is True
@@ -305,7 +295,7 @@ def describe_handle_get_rule_execution():
 
     @pytest.mark.asyncio
     async def it_returns_error_when_execution_id_missing(monkeypatch):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         result = await handle_get_rule_execution({"rule_id": RULE_ID})
         data = json.loads(result[0].text)
         assert data["error"] is True
@@ -316,10 +306,8 @@ def describe_handle_get_rule_execution():
     async def it_returns_full_execution_detail(
         monkeypatch, sample_get_rule_execution_response
     ):
-        _set_token(monkeypatch)
-        respx.get(
-            f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-        ).mock(
+        _set_v1_key(monkeypatch)
+        respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
             return_value=httpx.Response(200, json=sample_get_rule_execution_response)
         )
 
@@ -345,7 +333,7 @@ def describe_handle_get_rule_execution():
     async def it_returns_failed_execution_detail(
         monkeypatch, sample_get_rule_execution_failed_response
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         failed_id = "0d6195f3-c855-4cc0-b150-3364bf57d07d"
         respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{failed_id}").mock(
             return_value=httpx.Response(
@@ -364,14 +352,10 @@ def describe_handle_get_rule_execution():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_404_via_call_tool(
-        monkeypatch, sample_error_response_not_found
-    ):
-        _set_token(monkeypatch)
-        respx.get(
-            f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-        ).mock(
-            return_value=httpx.Response(404, json=sample_error_response_not_found)
+    async def it_surfaces_404_via_call_tool(monkeypatch, sample_v1_error_not_found):
+        _set_v1_key(monkeypatch)
+        respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
+            return_value=httpx.Response(404, json=sample_v1_error_not_found)
         )
 
         result = await call_tool(
@@ -385,16 +369,10 @@ def describe_handle_get_rule_execution():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_401_via_call_tool(
-        monkeypatch, sample_error_response_unauthorized
-    ):
-        _set_token(monkeypatch, "bad")
-        respx.get(
-            f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-        ).mock(
-            return_value=httpx.Response(
-                401, json=sample_error_response_unauthorized
-            )
+    async def it_surfaces_401_via_call_tool(monkeypatch, sample_v1_error_unauthorized):
+        _set_v1_key(monkeypatch, "bad")
+        respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
+            return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
         )
 
         result = await call_tool(
@@ -417,15 +395,15 @@ def describe_handle_list_transfers():
 
     @pytest.mark.asyncio
     async def it_returns_error_when_token_not_set(monkeypatch):
-        _clear_token(monkeypatch)
+        _clear_v1_key(monkeypatch)
         result = await handle_list_transfers({"account_id": ACCOUNT_ID})
         data = json.loads(result[0].text)
         assert data["error"] is True
-        assert "SEQUENCE_ACCESS_TOKEN" in data["message"]
+        assert "SEQUENCE_V1_API_KEY" in data["message"]
 
     @pytest.mark.asyncio
     async def it_returns_error_when_account_id_missing(monkeypatch):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         result = await handle_list_transfers({})
         data = json.loads(result[0].text)
         assert data["error"] is True
@@ -436,7 +414,7 @@ def describe_handle_list_transfers():
     async def it_returns_transfers_with_dollars(
         monkeypatch, sample_list_transfers_response
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
             return_value=httpx.Response(200, json=sample_list_transfers_response)
         )
@@ -464,7 +442,7 @@ def describe_handle_list_transfers():
     async def it_handles_null_source(
         monkeypatch, sample_list_transfers_no_source_response
     ):
-        _set_token(monkeypatch)
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
             return_value=httpx.Response(
                 200, json=sample_list_transfers_no_source_response
@@ -481,10 +459,8 @@ def describe_handle_list_transfers():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_passes_page_and_page_size(
-        monkeypatch, sample_list_transfers_response
-    ):
-        _set_token(monkeypatch)
+    async def it_passes_page_and_page_size(monkeypatch, sample_list_transfers_response):
+        _set_v1_key(monkeypatch)
         route = respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
             return_value=httpx.Response(200, json=sample_list_transfers_response)
         )
@@ -499,14 +475,10 @@ def describe_handle_list_transfers():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_401_via_call_tool(
-        monkeypatch, sample_error_response_unauthorized
-    ):
-        _set_token(monkeypatch, "bad")
+    async def it_surfaces_401_via_call_tool(monkeypatch, sample_v1_error_unauthorized):
+        _set_v1_key(monkeypatch, "bad")
         respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
-            return_value=httpx.Response(
-                401, json=sample_error_response_unauthorized
-            )
+            return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
         )
 
         result = await call_tool("list_transfers", {"account_id": ACCOUNT_ID})
@@ -517,12 +489,10 @@ def describe_handle_list_transfers():
 
     @pytest.mark.asyncio
     @respx.mock
-    async def it_surfaces_429_via_call_tool(
-        monkeypatch, sample_error_response_rate_limit
-    ):
-        _set_token(monkeypatch)
+    async def it_surfaces_429_via_call_tool(monkeypatch, sample_v1_error_rate_limit):
+        _set_v1_key(monkeypatch)
         respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
-            return_value=httpx.Response(429, json=sample_error_response_rate_limit)
+            return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
         )
 
         result = await call_tool("list_transfers", {"account_id": ACCOUNT_ID})
@@ -530,3 +500,63 @@ def describe_handle_list_transfers():
 
         assert data["error"] is True
         assert data["code"] == "TOO_MANY_REQUESTS"
+
+
+# ---------------------------------------------------------------------------
+# SEQUENCE_V1_API_KEY auth behaviour (item 4)
+# ---------------------------------------------------------------------------
+
+
+def describe_v1_api_key_auth():
+    """Tests confirming SEQUENCE_V1_API_KEY is used for v1 tools and is
+    independent of SEQUENCE_ACCESS_TOKEN."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def it_uses_v1_key_for_get_rule(monkeypatch, sample_rule_response):
+        """v1 tool succeeds when SEQUENCE_V1_API_KEY is set."""
+        _set_v1_key(monkeypatch, "v1_test_key")
+        monkeypatch.delenv("SEQUENCE_ACCESS_TOKEN", raising=False)
+
+        respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
+            return_value=httpx.Response(200, json=sample_rule_response)
+        )
+
+        result = await handle_get_rule({"rule_id": RULE_ID})
+        data = json.loads(result[0].text)
+        assert "error" not in data or data.get("error") is not True
+        assert data["id"] == RULE_ID
+
+    @pytest.mark.asyncio
+    async def it_errors_when_only_access_token_is_set(monkeypatch):
+        """v1 tool fails with a clear message when only SEQUENCE_ACCESS_TOKEN is set."""
+        monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", "old_legacy_token")
+        monkeypatch.delenv("SEQUENCE_V1_API_KEY", raising=False)
+
+        result = await handle_get_rule({"rule_id": RULE_ID})
+        data = json.loads(result[0].text)
+
+        assert data["error"] is True
+        assert "SEQUENCE_V1_API_KEY" in data["message"]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def legacy_get_accounts_unaffected_by_v1_key(
+        monkeypatch, sample_accounts_response
+    ):
+        """Legacy get_accounts still works with SEQUENCE_ACCESS_TOKEN even when
+        SEQUENCE_V1_API_KEY is absent."""
+        from sequence_mcp.server import handle_get_accounts
+
+        monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", "legacy_token")
+        monkeypatch.delenv("SEQUENCE_V1_API_KEY", raising=False)
+
+        respx.post("https://api.getsequence.io/accounts").mock(
+            return_value=httpx.Response(200, json=sample_accounts_response)
+        )
+
+        result = await handle_get_accounts()
+        data = json.loads(result[0].text)
+
+        assert "accounts" in data
+        assert data["total_accounts"] == 3

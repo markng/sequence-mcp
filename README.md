@@ -55,23 +55,29 @@ An MCP (Model Context Protocol) server that provides access to the [Sequence](ht
 2. **Generate an Access Token**: Navigate to Account Settings > Access Tokens. Used for `get_accounts`.
 3. **Get Rule API Secrets**: Each Rule with "Remote API" trigger type has an API secret. Used for `trigger_rule`.
 
-#### Tier 1 Platform v1 tools
+#### Tier 1 Platform v1 tools (`SEQUENCE_V1_API_KEY`)
 
-1. **Create a Platform v1 API Key**: Settings > API Keys > Create Platform v1 Key
+1. **Create a Platform v1 API Key**: Go to Settings → API Keys in the Sequence dashboard and create a new key.
 2. Grant the key the scopes it needs:
    - `READ_RULES` — for `get_rule`, `list_rule_executions`, `get_rule_execution`
    - `READ_TRANSFERS` — for `list_transfers`
-3. Export the key as `SEQUENCE_ACCESS_TOKEN` (same variable, but different key format)
+3. Export the key as `SEQUENCE_V1_API_KEY`.
 
-> **Note**: The legacy `SEQUENCE_ACCESS_TOKEN` (old-format token) does NOT work with Platform v1 endpoints. You need a new Platform v1 key from the dashboard.
+> **Note**: The old-format `SEQUENCE_ACCESS_TOKEN` does NOT work with Platform v1 endpoints. A distinct key from Settings → API Keys is required.
 
 ### Environment Variables
 
-Set your access token as an environment variable:
+Both variables must be set to use the full toolset:
 
 ```bash
-export SEQUENCE_ACCESS_TOKEN="your_access_token_here"
+# Legacy tools: get_accounts
+export SEQUENCE_ACCESS_TOKEN="your_legacy_access_token_here"
+
+# Tier 1 Platform v1 tools: get_rule, list_rule_executions, get_rule_execution, list_transfers
+export SEQUENCE_V1_API_KEY="your_platform_v1_api_key_here"
 ```
+
+**Manual step for Mark:** add `SEQUENCE_V1_API_KEY=<key>` to `~/.claude.env` once you generate the key from the Sequence dashboard.
 
 ## Usage
 

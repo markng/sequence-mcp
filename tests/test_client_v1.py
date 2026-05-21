@@ -74,9 +74,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_404(sample_error_response_not_found):
+        async def it_raises_on_404(sample_v1_error_not_found):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-                return_value=httpx.Response(404, json=sample_error_response_not_found)
+                return_value=httpx.Response(404, json=sample_v1_error_not_found)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -88,25 +88,23 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_401(sample_error_response_unauthorized):
+        async def it_raises_on_401(sample_v1_error_unauthorized):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-                return_value=httpx.Response(
-                    401, json=sample_error_response_unauthorized
-                )
+                return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
             )
 
             async with SequenceClient(access_token="bad_token") as client:
                 with pytest.raises(SequenceError) as exc_info:
                     await client.get_rule(rule_id=RULE_ID)
 
-            assert exc_info.value.code == "INVALID_ACCESS_TOKEN"
+            assert exc_info.value.code == "UNAUTHORIZED"
             assert exc_info.value.status_code == 401
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_403(sample_error_response_forbidden):
+        async def it_raises_on_403(sample_v1_error_forbidden):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-                return_value=httpx.Response(403, json=sample_error_response_forbidden)
+                return_value=httpx.Response(403, json=sample_v1_error_forbidden)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -118,11 +116,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_429(sample_error_response_rate_limit):
+        async def it_raises_on_429(sample_v1_error_rate_limit):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}").mock(
-                return_value=httpx.Response(
-                    429, json=sample_error_response_rate_limit
-                )
+                return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -178,9 +174,7 @@ def describe_SequenceClient_v1():
             )
 
             async with SequenceClient(access_token="tok") as client:
-                await client.list_rule_executions(
-                    rule_id=RULE_ID, page=2, page_size=25
-                )
+                await client.list_rule_executions(rule_id=RULE_ID, page=2, page_size=25)
 
             request = route.calls[0].request
             assert "page=2" in str(request.url)
@@ -188,11 +182,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_401(sample_error_response_unauthorized):
+        async def it_raises_on_401(sample_v1_error_unauthorized):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-                return_value=httpx.Response(
-                    401, json=sample_error_response_unauthorized
-                )
+                return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
             )
 
             async with SequenceClient(access_token="bad") as client:
@@ -203,11 +195,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_429(sample_error_response_rate_limit):
+        async def it_raises_on_429(sample_v1_error_rate_limit):
             respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions").mock(
-                return_value=httpx.Response(
-                    429, json=sample_error_response_rate_limit
-                )
+                return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -234,9 +224,7 @@ def describe_SequenceClient_v1():
         async def it_returns_full_execution_detail(
             sample_get_rule_execution_response,
         ):
-            respx.get(
-                f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-            ).mock(
+            respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
                 return_value=httpx.Response(
                     200, json=sample_get_rule_execution_response
                 )
@@ -265,9 +253,7 @@ def describe_SequenceClient_v1():
             sample_get_rule_execution_failed_response,
         ):
             failed_exec_id = "0d6195f3-c855-4cc0-b150-3364bf57d07d"
-            respx.get(
-                f"{V1_BASE}/rules/{RULE_ID}/executions/{failed_exec_id}"
-            ).mock(
+            respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{failed_exec_id}").mock(
                 return_value=httpx.Response(
                     200, json=sample_get_rule_execution_failed_response
                 )
@@ -284,11 +270,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_404(sample_error_response_not_found):
-            respx.get(
-                f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-            ).mock(
-                return_value=httpx.Response(404, json=sample_error_response_not_found)
+        async def it_raises_on_404(sample_v1_error_not_found):
+            respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
+                return_value=httpx.Response(404, json=sample_v1_error_not_found)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -301,13 +285,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_401(sample_error_response_unauthorized):
-            respx.get(
-                f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-            ).mock(
-                return_value=httpx.Response(
-                    401, json=sample_error_response_unauthorized
-                )
+        async def it_raises_on_401(sample_v1_error_unauthorized):
+            respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
+                return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
             )
 
             async with SequenceClient(access_token="bad") as client:
@@ -320,13 +300,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_429(sample_error_response_rate_limit):
-            respx.get(
-                f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}"
-            ).mock(
-                return_value=httpx.Response(
-                    429, json=sample_error_response_rate_limit
-                )
+        async def it_raises_on_429(sample_v1_error_rate_limit):
+            respx.get(f"{V1_BASE}/rules/{RULE_ID}/executions/{EXECUTION_ID_1}").mock(
+                return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -362,9 +338,7 @@ def describe_SequenceClient_v1():
             )
 
             async with SequenceClient(access_token="tok") as client:
-                items, pagination = await client.list_transfers(
-                    account_id=ACCOUNT_ID
-                )
+                items, pagination = await client.list_transfers(account_id=ACCOUNT_ID)
 
             assert len(items) == 1
             transfer = items[0]
@@ -414,9 +388,7 @@ def describe_SequenceClient_v1():
             )
 
             async with SequenceClient(access_token="tok") as client:
-                await client.list_transfers(
-                    account_id=ACCOUNT_ID, page=3, page_size=50
-                )
+                await client.list_transfers(account_id=ACCOUNT_ID, page=3, page_size=50)
 
             request = route.calls[0].request
             assert "page=3" in str(request.url)
@@ -424,11 +396,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_401(sample_error_response_unauthorized):
+        async def it_raises_on_401(sample_v1_error_unauthorized):
             respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
-                return_value=httpx.Response(
-                    401, json=sample_error_response_unauthorized
-                )
+                return_value=httpx.Response(401, json=sample_v1_error_unauthorized)
             )
 
             async with SequenceClient(access_token="bad") as client:
@@ -439,9 +409,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_403(sample_error_response_forbidden):
+        async def it_raises_on_403(sample_v1_error_forbidden):
             respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
-                return_value=httpx.Response(403, json=sample_error_response_forbidden)
+                return_value=httpx.Response(403, json=sample_v1_error_forbidden)
             )
 
             async with SequenceClient(access_token="tok") as client:
@@ -452,11 +422,9 @@ def describe_SequenceClient_v1():
 
         @pytest.mark.asyncio
         @respx.mock
-        async def it_raises_on_429(sample_error_response_rate_limit):
+        async def it_raises_on_429(sample_v1_error_rate_limit):
             respx.get(f"{V1_BASE}/accounts/{ACCOUNT_ID}/transfers").mock(
-                return_value=httpx.Response(
-                    429, json=sample_error_response_rate_limit
-                )
+                return_value=httpx.Response(429, json=sample_v1_error_rate_limit)
             )
 
             async with SequenceClient(access_token="tok") as client:

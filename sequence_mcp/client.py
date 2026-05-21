@@ -31,7 +31,6 @@ class SequenceClient:
     """
 
     BASE_URL = "https://api.getsequence.io"
-    PLATFORM_V1_BASE_URL = PLATFORM_V1_BASE_URL
 
     def __init__(
         self,
@@ -56,7 +55,7 @@ class SequenceClient:
             timeout=self.timeout,
         )
         self._v1_client = httpx.AsyncClient(
-            base_url=self.PLATFORM_V1_BASE_URL,
+            base_url=PLATFORM_V1_BASE_URL,
             timeout=self.timeout,
         )
         return self
@@ -83,7 +82,7 @@ class SequenceClient:
         """Get the Platform v1 HTTP client, creating one if necessary."""
         if self._v1_client is None:
             self._v1_client = httpx.AsyncClient(
-                base_url=self.PLATFORM_V1_BASE_URL,
+                base_url=PLATFORM_V1_BASE_URL,
                 timeout=self.timeout,
             )
         return self._v1_client
@@ -114,7 +113,9 @@ class SequenceClient:
             code = "HTTP_ERROR"
             message = f"HTTP {response.status_code}: {response.text}"
 
-        raise SequenceError(code=code, message=message, status_code=response.status_code)
+        raise SequenceError(
+            code=code, message=message, status_code=response.status_code
+        )
 
     def _v1_auth_headers(self) -> dict[str, str]:
         """Return Authorization header for Platform v1 requests."""
@@ -122,7 +123,6 @@ class SequenceClient:
             raise ValueError("Access token is required for Platform v1 operations")
         return {
             "Authorization": f"Bearer {self.access_token}",
-            "x-called-reason": "MCP tool call from sequence-mcp agent",
         }
 
     # ------------------------------------------------------------------

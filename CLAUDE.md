@@ -48,12 +48,14 @@ python -m sequence_mcp.server
 2. `client.py` - Async HTTP client (`SequenceClient`) using httpx with context manager support
 3. `server.py` - MCP server that exposes tools and delegates to the client
 
-**Authentication:** Two methods coexist:
-- Legacy access token (`SEQUENCE_ACCESS_TOKEN`) for `get_accounts` — uses `x-sequence-access-token` header
+**Authentication:** Three methods coexist:
+- `SEQUENCE_ACCESS_TOKEN` — legacy access token for `get_accounts`; uses `x-sequence-access-token` header
 - Per-rule API secrets passed as parameters for `trigger_rule` — uses `x-sequence-signature` header
-- Platform v1 Bearer token (`SEQUENCE_ACCESS_TOKEN`, different key format) for all v1 tools — uses standard `Authorization: Bearer` header. Requires a Platform v1 API key from Sequence dashboard with explicit scopes (`READ_RULES`, `READ_TRANSFERS`).
+- `SEQUENCE_V1_API_KEY` — Platform v1 Bearer token for all four Tier 1 tools; uses standard `Authorization: Bearer` header. Generate from Sequence dashboard: Settings → API Keys. Requires scopes `READ_RULES` (rules + executions) and/or `READ_TRANSFERS` (transfers).
 
-**Important**: The old-format `SEQUENCE_ACCESS_TOKEN` does NOT work with Platform v1 endpoints. A new Platform v1 key must be generated from Settings > API Keys in the Sequence dashboard.
+**Important**: The old `SEQUENCE_ACCESS_TOKEN` does NOT work with Platform v1 endpoints. `SEQUENCE_V1_API_KEY` is a separate env var backed by a distinct key type. Both must be present to use the full toolset.
+
+**Manual setup**: Add `SEQUENCE_V1_API_KEY=<key>` to `~/.claude.env` after generating the key.
 
 **Error handling:** `SequenceError` exception carries API error codes. The legacy API uses flat error responses `{"code": ..., "message": ...}`. Platform v1 uses nested responses `{"requestId": ..., "error": {"code": ..., "message": ...}}`. The client handles both shapes via `_handle_error_response`.
 
