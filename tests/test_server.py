@@ -182,9 +182,9 @@ def describe_handle_trigger_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_triggers_rule_successfully(sample_trigger_response):
-        respx.post(
-            "https://api.getsequence.io/remote-api/rules/ru_12345/trigger"
-        ).mock(return_value=httpx.Response(200, json=sample_trigger_response))
+        respx.post("https://api.getsequence.io/remote-api/rules/ru_12345/trigger").mock(
+            return_value=httpx.Response(200, json=sample_trigger_response)
+        )
 
         result = await handle_trigger_rule(
             {"rule_id": "ru_12345", "api_secret": "secret_123"}
@@ -235,9 +235,7 @@ def describe_handle_trigger_rule():
     @pytest.mark.asyncio
     @respx.mock
     async def it_handles_api_errors(sample_error_response_invalid_secret):
-        respx.post(
-            "https://api.getsequence.io/remote-api/rules/ru_test/trigger"
-        ).mock(
+        respx.post("https://api.getsequence.io/remote-api/rules/ru_test/trigger").mock(
             return_value=httpx.Response(401, json=sample_error_response_invalid_secret)
         )
 
@@ -306,7 +304,9 @@ def describe_main():
         mock_server_run = AsyncMock()
         monkeypatch.setattr(server.server, "run", mock_server_run)
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             await main()
 
         # Verify server.run was called with the mock streams
@@ -336,7 +336,9 @@ def describe_main():
         mock_server_run = AsyncMock()
         monkeypatch.setattr(server.server, "run", mock_server_run)
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             await main()
 
         # Server should still run even without token
@@ -348,9 +350,13 @@ def describe_main():
         monkeypatch.setenv("SEQUENCE_ACCESS_TOKEN", "test_token")
 
         mock_context_manager = AsyncMock()
-        mock_context_manager.__aenter__.side_effect = RuntimeError("Server connection failed")
+        mock_context_manager.__aenter__.side_effect = RuntimeError(
+            "Server connection failed"
+        )
 
-        with patch("sequence_mcp.server.stdio_server", return_value=mock_context_manager):
+        with patch(
+            "sequence_mcp.server.stdio_server", return_value=mock_context_manager
+        ):
             with pytest.raises(RuntimeError, match="Server connection failed"):
                 await main()
 
@@ -419,8 +425,7 @@ def describe_main_entry_point():
 
         # The KeyboardInterrupt handler logs "Server stopped by user"
         assert any(
-            "stopped by user" in record.message.lower()
-            for record in caplog.records
+            "stopped by user" in record.message.lower() for record in caplog.records
         )
 
     def it_exits_with_code_1_on_fatal_error(monkeypatch, caplog):

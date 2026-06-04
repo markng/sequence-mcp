@@ -75,7 +75,9 @@ class SequenceClient:
             code = "HTTP_ERROR"
             message = f"HTTP {response.status_code}: {response.text}"
 
-        raise SequenceError(code=code, message=message, status_code=response.status_code)
+        raise SequenceError(
+            code=code, message=message, status_code=response.status_code
+        )
 
     async def get_accounts(self) -> list[Account]:
         """Fetch all accounts with their balances.

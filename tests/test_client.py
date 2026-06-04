@@ -58,7 +58,9 @@ def describe_SequenceClient():
                 await client.get_accounts()
 
             request = route.calls[0].request
-            assert request.headers["x-sequence-access-token"] == "Bearer my_secret_token"
+            assert (
+                request.headers["x-sequence-access-token"] == "Bearer my_secret_token"
+            )
             assert request.headers["content-type"] == "application/json"
 
         @pytest.mark.asyncio
@@ -71,7 +73,9 @@ def describe_SequenceClient():
         @respx.mock
         async def it_handles_unauthorized_error(sample_error_response_unauthorized):
             respx.post("https://api.getsequence.io/accounts").mock(
-                return_value=httpx.Response(401, json=sample_error_response_unauthorized)
+                return_value=httpx.Response(
+                    401, json=sample_error_response_unauthorized
+                )
             )
 
             async with SequenceClient(access_token="invalid_token") as client:
@@ -194,7 +198,9 @@ def describe_SequenceClient():
             respx.post(
                 "https://api.getsequence.io/remote-api/rules/ru_test/trigger"
             ).mock(
-                return_value=httpx.Response(401, json=sample_error_response_invalid_secret)
+                return_value=httpx.Response(
+                    401, json=sample_error_response_invalid_secret
+                )
             )
 
             async with SequenceClient() as client:
@@ -254,7 +260,9 @@ def describe_SequenceClient():
                 "https://api.getsequence.io/remote-api/rules/ru_test/trigger"
             ).mock(
                 return_value=httpx.Response(
-                    500, content=b"Internal Server Error", headers={"content-type": "text/plain"}
+                    500,
+                    content=b"Internal Server Error",
+                    headers={"content-type": "text/plain"},
                 )
             )
 

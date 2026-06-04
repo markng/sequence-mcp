@@ -6,23 +6,64 @@ import json
 import logging
 from typing import Any
 
+# Configure logging FIRST before any imports that might log
+# Log to file AND stderr (stdout is reserved for MCP protocol messages)
+LOG_FILE = os.path.expanduser("~/Library/Logs/sequence-mcp.log")
+
+# Ensure log directory exists
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+# Set up logging with both file and stderr handlers
+logger = logging.getLogger("sequence-mcp")
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# File handler - persistent logs
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Stderr handler - for direct terminal viewing
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.setLevel(logging.DEBUG)
+stderr_handler.setFormatter(formatter)
+logger.addHandler(stderr_handler)
+
+logger.info("Logging to file: %s", LOG_FILE)
+
+# Log immediately on module load
+logger.debug("=== sequence-mcp module loading ===")
+logger.debug("Python version: %s", sys.version)
+logger.debug("Python executable: %s", sys.executable)
+logger.debug("Working directory: %s", os.getcwd())
+logger.debug("PYTHONPATH: %s", os.environ.get("PYTHONPATH", "(not set)"))
+
+logger.debug("Importing mcp.server...")
 from mcp.server import Server
+
+logger.debug("Imported mcp.server.Server")
+
+logger.debug("Importing mcp.server.stdio...")
 from mcp.server.stdio import stdio_server
+
+logger.debug("Imported stdio_server")
+
+logger.debug("Importing mcp.types...")
 from mcp.types import Tool, TextContent
 
+logger.debug("Imported Tool, TextContent")
+
+logger.debug("Importing local modules...")
 from .client import SequenceClient
 from .models import SequenceError
 
-# Configure logging to stderr so Claude Code can see errors
-# (stdout is reserved for MCP protocol messages)
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stderr,
-)
-logger = logging.getLogger("sequence-mcp")
+logger.debug("All imports complete")
 
+logger.debug("Creating MCP Server instance...")
 server = Server("sequence-banking")
+logger.debug("MCP Server instance created: %s", server)
 
 
 def get_access_token() -> str | None:
@@ -33,6 +74,7 @@ def get_access_token() -> str | None:
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
+    logger.debug("list_tools() called - returning 2 tools")
     return [
         Tool(
             name="get_accounts",
@@ -205,7 +247,8 @@ async def handle_trigger_rule(arguments: dict[str, Any]) -> list[TextContent]:
 
 async def main():  # pragma: no cover
     """Run the MCP server."""
-    logger.info("Starting Sequence MCP server...")
+    logger.info("=== Starting Sequence MCP server ===")
+    logger.debug("main() entered")
 
     # Log environment status (without exposing secrets)
     access_token = get_access_token()
@@ -214,14 +257,31 @@ async def main():  # pragma: no cover
     else:
         logger.warning("SEQUENCE_ACCESS_TOKEN is not set - get_accounts will fail")
 
+    # Log stdin/stdout status
+    logger.debug("stdin isatty: %s", sys.stdin.isatty())
+    logger.debug("stdout isatty: %s", sys.stdout.isatty())
+    logger.debug("stderr isatty: %s", sys.stderr.isatty())
+    logger.debug("stdin fileno: %s", sys.stdin.fileno())
+    logger.debug("stdout fileno: %s", sys.stdout.fileno())
+
     try:
+        logger.debug("Entering stdio_server() context manager...")
         async with stdio_server() as (read_stream, write_stream):
-            logger.info("MCP stdio server started, awaiting requests...")
+            logger.info("stdio_server context entered successfully")
+            logger.debug("read_stream type: %s", type(read_stream))
+            logger.debug("write_stream type: %s", type(write_stream))
+
+            logger.debug("Creating initialization options...")
+            init_options = server.create_initialization_options()
+            logger.debug("Initialization options: %s", init_options)
+
+            logger.info("Calling server.run() - awaiting MCP requests...")
             await server.run(
                 read_stream,
                 write_stream,
-                server.create_initialization_options(),
+                init_options,
             )
+            logger.info("server.run() returned normally")
     except Exception as e:
         logger.exception("MCP server error: %s", e)
         raise
@@ -230,10 +290,16 @@ async def main():  # pragma: no cover
 if __name__ == "__main__":  # pragma: no cover
     import asyncio
 
+    logger.info("=== __main__ block executing ===")
+    logger.debug("About to call asyncio.run(main())")
+
     try:
         asyncio.run(main())
+        logger.info("asyncio.run(main()) completed normally")
     except KeyboardInterrupt:
-        logger.info("Server stopped by user")
+        logger.info("Server stopped by user (KeyboardInterrupt)")
     except Exception as e:
         logger.exception("Fatal error starting server: %s", e)
         sys.exit(1)
+
+logger.debug("=== sequence-mcp module fully loaded ===")
